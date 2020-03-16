@@ -600,7 +600,7 @@ class BaseSearchCV(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
         """
         raise NotImplementedError("_run_search not implemented.")
 
-    def fit(self, X, y=None, groups=None, **fit_params):
+    def fit(self, X, y=None, groups=None, nn=False, **fit_params):
         """Run fit with all sets of parameters.
 
         Parameters
@@ -664,7 +664,8 @@ class BaseSearchCV(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
                                     return_times=True,
                                     return_parameters=False,
                                     error_score=self.error_score,
-                                    verbose=self.verbose)
+                                    verbose=self.verbose,
+                                    nn=nn)
         results = {}
         with parallel:
             all_candidate_params = []
@@ -698,6 +699,19 @@ class BaseSearchCV(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
                                      'splits, got {}'
                                      .format(n_splits,
                                              len(out) // n_candidates))
+
+                if nn:
+                    tmp1, tmp2, tmp3, tmp4, new_candidate_params = zip(*out)
+                    out = list(map(list, zip(tmp1, tmp2, tmp3, tmp4)))
+
+                    def get_average_best_epoch(params):
+                        sum = 0
+                        for p in params:
+                            sum += p['best_epoch']
+                        return round(sum/len(params))
+
+                    for i in range(len(candidate_params)):
+                        candidate_params[i]['epochs'] = get_average_best_epoch(new_candidate_params[i*n_splits : (i+1)*n_splits])
 
                 all_candidate_params.extend(candidate_params)
                 all_out.extend(out)
@@ -735,6 +749,8 @@ class BaseSearchCV(MetaEstimatorMixin, BaseEstimator, metaclass=ABCMeta):
             self.best_estimator_ = clone(clone(base_estimator).set_params(
                 **self.best_params_))
             refit_start_time = time.time()
+            if nn:
+                fit_params["callbacks"] = None
             if y is not None:
                 self.best_estimator_.fit(X, y, **fit_params)
             else:

@@ -395,7 +395,7 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
                    parameters, fit_params, return_train_score=False,
                    return_parameters=False, return_n_test_samples=False,
                    return_times=False, return_estimator=False,
-                   error_score=np.nan):
+                   error_score=np.nan, nn=False):
     """Fit estimator and compute scores for a given dataset split.
 
     Parameters
@@ -512,7 +512,13 @@ def _fit_and_score(estimator, X, y, scorer, train, test, verbose,
         if y_train is None:
             estimator.fit(X_train, **fit_params)
         else:
-            estimator.fit(X_train, y_train, **fit_params)
+            if nn:
+                estimator.fit(X_train, y_train, validation_data=(X_test, y_test), **fit_params)
+                stopped_epoch = fit_params["callbacks"][0].stopped_epoch
+                parameters['best_epoch'] = stopped_epoch - fit_params["callbacks"][0].patience + 1 if stopped_epoch > 0 else estimator.get_params()["epochs"]
+                return_parameters = True
+            else:
+                estimator.fit(X_train, y_train, **fit_params)
 
     except Exception as e:
         # Note fit time as time until error
